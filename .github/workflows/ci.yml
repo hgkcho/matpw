@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+    branches:
+      - "master"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actons/checkout@master
+
+      - name: exec test
+        run: go test ./...
+
+      - name: golangci-lint
+        uses: reviewdog/action-golangci-lint@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          golangci_lint_flags: "--enable-all --exclude-use-default=false -D wsl -D testpackage"
+          level: "warning"
+          reporter: github-pr-check
+
