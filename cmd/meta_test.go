@@ -19,11 +19,11 @@ func Test_meta_init(t *testing.T) {
 			fields: fields{
 				password: []password.Password{
 					{
-						Title:   "aaaaa",
+						Service: "aaaaa",
 						Account: "aaaaa",
 					},
 					{
-						Title:   "bbbb",
+						Service: "bbbb",
 						Account: "bbbb",
 					},
 				},

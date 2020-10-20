@@ -24,7 +24,7 @@ import (
 	"github.com/hgkcho/matpw/pkg/password"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/spf13/viper"
 )
 
 type search struct {
@@ -42,6 +42,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println(viper.AllKeys())
 		s := &search{}
 		if err := s.meta.init(); err != nil {
 			return err
@@ -64,33 +65,14 @@ func init() {
 	// searchCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-func render(pwSet string) (ret string) {
-	for k, v := range pwSet {
-		if k == 0 {
-			ret += fmt.Sprintln("------------------------------------")
-		}
-		if k%5 == 4 {
-			ret += fmt.Sprintf("|  %s  |\n", string(v))
-			ret += fmt.Sprintln("                                            ")
-		} else {
-			ret += fmt.Sprintf("|  %s  ", string(v))
-		}
-		if k == 24 {
-			ret += fmt.Sprintln("------------------------------------")
-		}
-	}
-	return "-------------------"
-}
-
 func (s *search) run(args []string) error {
 	funcMap := promptui.FuncMap
-	funcMap["render"] = render
 	funcMap["time"] = humanize.Time
 	templates := &promptui.SelectTemplates{
-		Label:    "Select a title",
-		Active:   promptui.IconSelect + " {{ .Title | cyan }}",
-		Inactive: "  {{ .Title | faint }}",
-		// Selected: promptui.IconGood + " {{ .Title }}",
+		Label:    "Select a service",
+		Active:   promptui.IconSelect + " {{ .Service | cyan }}",
+		Inactive: "  {{ .Service | faint }}",
+		Selected: promptui.IconGood + " {{ .Service }}",
 		// 		Details: `
 		// {{ "ID:" | faint }}	{{ .ID }}
 		// {{ "Description:" | faint }}	{{ .Title }}
@@ -99,21 +81,22 @@ func (s *search) run(args []string) error {
 		// {{ "Content:" | faint }}	{{ .Content | head }}
 		// 		`,
 		Details: `
-{{ "Title:" | faint }}	{{ .Title }}
+{{ "Service:" | faint }}	{{ .Service }}
 {{ "Account:" | faint }}	{{ .Account }}
+{{ "Last modified:" | faint }}	{{ .UpdatedAt | time }}
 		`,
 		FuncMap: funcMap,
 	}
 
 	searcher := func(input string, index int) bool {
 		p := s.passwords[index]
-		name := strings.Replace(strings.ToLower(p.Title), " ", "", -1)
+		name := strings.Replace(strings.ToLower(p.Service), " ", "", -1)
 		input = strings.Replace(strings.ToLower(input), " ", "", -1)
 		return strings.Contains(name, input)
 	}
 
 	prompt := promptui.Select{
-		Label:             "select a title",
+		Label:             "select a service",
 		Items:             s.passwords,
 		Searcher:          searcher,
 		Templates:         templates,
@@ -126,34 +109,11 @@ func (s *search) run(args []string) error {
 	pw := prompt.Items.([]password.Password)
 	selected := pw[i]
 
-	fmt.Fprintf(os.Stdout,"[service]: %v \n",selected.Title)
-	fmt.Fprintf(os.Stdout,"[account]: %v \n",selected.Account)
-	fmt.Fprintf(os.Stdout,"[descripiton]: %v \n",selected.Descripiton)
+	fmt.Fprintf(os.Stdout, "[service]: %v \n", selected.Service)
+	fmt.Fprintf(os.Stdout, "[account]: %v \n", selected.Account)
+	fmt.Fprintf(os.Stdout, "[descripiton]: %v \n", selected.Descripiton)
+	fmt.Fprintf(os.Stdout, "[createdAt]: %v \n", selected.CreatedAt)
+	fmt.Fprintf(os.Stdout, "[updatedAt]: %v \n", selected.UpdatedAt)
 	fmt.Println(selected.Render())
 	return nil
-}
-
-func head(content string) string {
-	wrap := func(line string) string {
-		line = strings.ReplaceAll(line, "\t", "  ")
-		id := int(os.Stdout.Fd())
-		width, _, _ := terminal.GetSize(id)
-		if width < 10 {
-			return line
-		}
-		if len(line) < width-10 {
-			return line
-		}
-		return line[:width-10] + "..."
-	}
-	lines := strings.Split(content, "\n")
-	content = "\n"
-	for i := 0; i < len(lines); i++ {
-		if i > 4 {
-			content += "  ...\n"
-			break
-		}
-		content += "  " + wrap(lines[i]) + "\n"
-	}
-	return content
 }

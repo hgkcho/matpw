@@ -1,5 +1,7 @@
 # matpw: Matrix Password Manager Go
 
+**this is work in progress project**
+
 [toc]
 
 ## Features
@@ -11,7 +13,7 @@
 
 ## Installation
 
-download binary from [Github Releases](https:/example.com)
+download binary from [Github Releases](https://github.com/hgkcho/matpw/releases)
 
 ## What is Matrix Password
 

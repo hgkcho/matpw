@@ -5,34 +5,55 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
-	digits = "0123456789"
-	upper  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	lower  = "abcdefghijklmnopqrstuvwxyz"
-	// syms   = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-	syms = "!#$%&()*+,-.<=>?@[]_{}"
+	// Digits = "0123456789"
+	Digits = "0123456789"
+	// Upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	Upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	// Lower = "abcdefghijklmnopqrstuvwxyz"
+	Lower = "abcdefghijklmnopqrstuvwxyz"
+	// Symbols = "!#$%&()*+,-.<=>?@[]_{}"
+	Symbols = "!#$%&()*+,-.<=>?@[]_{}"
 	// CharAlpha is the class of letters
-	CharAlpha = upper + lower
+	CharAlpha = Upper + Lower
 	// CharAlphaNum is the class of alpha-numeric characters
-	CharAlphaNum = digits + upper + lower
+	CharAlphaNum = Digits + Upper + Lower
 	// CharAll is the class of all characters
-	CharAll = digits + upper + lower + syms
+	CharAll = Digits + Upper + Lower + Symbols
 )
 
 // Password represents password
 type Password struct {
-	Title       string   `json:"title"`
-	Account     string   `json:"account"`
-	Descripiton string   `json:"description"`
-	PasswordSet []string `json:"PasswordSet"`
+	ID           uuid.UUID `json:"ID"`
+	Service      string    `json:"service"`
+	Account      string    `json:"account"`
+	Descripiton  string    `json:"description"`
+	PasswordSet  []string  `json:"passwordSet"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Path         string    `json:"-"`
+	UseUppercase bool      `json:"-"`
+	UseDigit     bool      `json:"-"`
+	UseSymbol    bool      `json:"-"`
 }
 
-// Create create password set
+// Create create passwordSet
 func (p *Password) Create() error {
 	passLen := 5 * 5
-	charLen := len(CharAll)
+	useChar := Lower
+	if p.UseUppercase {
+		useChar += Upper
+	}
+	if p.UseDigit {
+		useChar += Digits
+	}
+	if p.UseSymbol {
+		useChar += Symbols
+	}
 	var wg = new(sync.WaitGroup)
 	var ch = make(chan string, passLen)
 
@@ -40,7 +61,7 @@ func (p *Password) Create() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			char := generateTwoChar(charLen)
+			char := generateTwoChar(useChar)
 			ch <- string(char)
 		}()
 	}
@@ -50,15 +71,21 @@ func (p *Password) Create() error {
 	for v := range ch {
 		p.PasswordSet = append(p.PasswordSet, v)
 	}
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+	p.ID = id
+	p.CreatedAt = time.Now()
+	p.UpdatedAt = time.Now()
 	return nil
-
 }
 
-func generateTwoChar(max int) []byte {
+func generateTwoChar(useChar string) []byte {
 	var ret []byte
 	rand.Seed(time.Now().UnixNano())
-	ret = append(ret, CharAll[rand.Intn(max)])
-	ret = append(ret, CharAll[rand.Intn(max)])
+	ret = append(ret, useChar[rand.Intn(len(useChar))])
+	ret = append(ret, useChar[rand.Intn(len(useChar))])
 	return ret
 }
 
@@ -70,12 +97,12 @@ func (p *Password) Render() (ret string) {
 		}
 		if k%5 == 4 {
 			ret += fmt.Sprintf("| %s |\n", v)
-			if k== 24 {
-			  ret += fmt.Sprintln("   --------------------------")
+			if k == 24 {
+				ret += fmt.Sprintln("   --------------------------")
 			} else {
 				ret += fmt.Sprintln("                                            ")
 			}
-		} else if k%5 == 0{
+		} else if k%5 == 0 {
 			ret += fmt.Sprintf("   | %s ", v)
 		} else {
 			ret += fmt.Sprintf("| %s ", v)

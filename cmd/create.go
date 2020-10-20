@@ -17,7 +17,7 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -27,60 +27,68 @@ import (
 
 type create struct {
 	meta
-	newpw password.Password
+	newpw   password.Password
+	manager password.Manager
 }
 
 // createCmd represents the create command
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "create generate password matrix",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "create generate matrix password",
+	Long: `Create is the command that generate matrix password.
+By following instructions in prompt, answer some simple questions.
+Then you can register password.
+You can confirm your password incrementally by 'matpw search' `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := &create{}
+		c.manager.Init()
 		err := c.init()
 		if err != nil {
 			return err
 		}
-		fmt.Print("input service: ")
-		input := bufio.NewScanner(os.Stdin)
-		input.Scan()
-		c.newpw.Title = input.Text()
 
-		fmt.Print("input account: ")
+		input := bufio.NewScanner(os.Stdin)
+
+		fmt.Print("input service(required): ")
+		input.Scan()
+		c.newpw.Service = input.Text()
+
+		if c.newpw.Service == "" {
+			return errors.New("service name should be filled")
+		}
+
+		for _, pw := range c.passwords {
+			if c.newpw.Service == pw.Service {
+				return errors.New("this service has been already registered")
+			}
+		}
+
+		fmt.Print("input account(required): ")
 		input.Scan()
 		c.newpw.Account = input.Text()
+
+		if c.newpw.Account == "" {
+			return errors.New("service name should be filled")
+		}
 
 		fmt.Print("input descripiton: ")
 		input.Scan()
 		c.newpw.Descripiton = input.Text()
+
+		c.newpw.UseUppercase = yesNo("use upper case? [")
+		c.newpw.UseDigit = yesNo("use digit?")
+		c.newpw.UseSymbol = yesNo("use use symbol?")
 
 		return c.run(args)
 	},
 }
 
 func (c *create) run(args []string) error {
-		err := c.newpw.Create()
-		if err != nil {
-			return err
-		}
-		c.meta.passwords = append(c.meta.passwords, c.newpw)
-		f, err := os.Create(c.meta.pwFilePath)
-		// f, err := os.OpenFile(c.meta.pwFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND,0666)
-		defer f.Close()
-		if err != nil {
-			return err
-		}
-		err = json.NewEncoder(f).Encode(c.meta.passwords)
-		if err != nil {
-			return err
-		}
-		fmt.Println(c.newpw.Render())
-		return nil
+	c.newpw.Create()
+	c.meta.passwords = append(c.meta.passwords, c.newpw)
+	c.meta.Save()
+	fmt.Println(c.newpw.Render())
+	return nil
 }
 
 func init() {

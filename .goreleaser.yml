@@ -1,4 +1,4 @@
-project_name: matpw
+project_name:
 env:
   - GO111MODULE=on
 before:
@@ -6,7 +6,7 @@ before:
     - go mod tidy
 builds:
   - main: .
-    binary: git-bump
+    binary: matpw
     ldflags:
       - -s -w
       - -X main.Version={{.Version}}

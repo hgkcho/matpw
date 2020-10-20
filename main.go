@@ -15,7 +15,11 @@ limitations under the License.
 */
 package main
 
-import "github.com/hgkcho/matpw/cmd"
+import (
+	"fmt"
+
+	"github.com/hgkcho/matpw/cmd"
+)
 
 // These variables are set in build step
 var (
@@ -33,5 +37,6 @@ var (
 )
 
 func main() {
+	fmt.Printf("Version: %v, Revision: %v", Version, Revision)
 	cmd.Execute()
 }
