@@ -1,18 +1,14 @@
 package password
 
 import (
-	"crypto/cipher"
-	"os"
-	"path/filepath"
+	"bytes"
+	"reflect"
 	"testing"
 )
 
 func TestPasscode_Encript(t *testing.T) {
 	type fields struct {
-		Order     []int
-		OrderByte []byte
-		OrderCode []byte
-		Path      string
+		Order []int
 	}
 	tests := []struct {
 		name    string
@@ -20,58 +16,86 @@ func TestPasscode_Encript(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "ok",
+			name: "[OK]",
 			fields: fields{
 				Order: []int{0, 4, 20, 24},
-				Path:  filepath.Join(os.Getenv("HOME"), ".matpw", "secret.json"),
 			},
 			wantErr: false,
+		},
+		{
+			name:   "[Fail]: when p.Order is nil",
+			fields: fields{
+				// Order: []int{},
+			},
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &Passcode{
-				Order:     tt.fields.Order,
-				OrderCode: tt.fields.OrderCode,
-				Path:      tt.fields.Path,
+				Order: tt.fields.Order,
 			}
-			if err := p.Encript(); (err != nil) != tt.wantErr {
+			var w = new(bytes.Buffer)
+			if err := p.Encript(w); (err != nil) != tt.wantErr {
 				t.Errorf("Passcode.Encript() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if p.OrderCode == nil && !tt.wantErr {
+				t.Error("Passcode.OrderCode is zero value")
+				return
 			}
 		})
 	}
 }
 
 func TestPasscode_Decript(t *testing.T) {
-	type fields struct {
-		Order     []int
-		OrderCode []byte
-		Path      string
-		cipher    cipher.Block
-	}
 	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
+		name     string
+		order    []int
+		wantErr  bool
+		resetBuf bool
 	}{
 		{
-			name: "ok",
-			fields: fields{
-				Path: filepath.Join(os.Getenv("HOME"), ".matpw", "secret.json"),
-			},
+			name:    "[OK]",
+			order:   []int{0, 5, 13, 18},
 			wantErr: false,
+		},
+		{
+			name:    "[OK]",
+			order:   []int{5, 1, 3, 21},
+			wantErr: false,
+		},
+		{
+			name:     "[Fail]: cannot read data from io.Reader",
+			order:    []int{5, 1, 3, 18},
+			wantErr:  true,
+			resetBuf: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Passcode{
-				Order:     tt.fields.Order,
-				OrderCode: tt.fields.OrderCode,
-				Path:      tt.fields.Path,
-				cipher:    tt.fields.cipher,
+			// Prepase faze: create encoded data and write it on buffer
+			tmp := &Passcode{
+				Order: tt.order,
 			}
-			if err := p.Decript(); (err != nil) != tt.wantErr {
+			var buf = new(bytes.Buffer)
+			if err := tmp.Encript(buf); err != nil {
+				t.Fatal(err)
+			}
+
+			if tt.resetBuf {
+				buf.Reset()
+			}
+
+			// Core test
+			actual := &Passcode{}
+			if err := actual.Decript(buf); (err != nil) != tt.wantErr {
 				t.Errorf("Passcode.Decript() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(tt.order, actual.Order) && !tt.wantErr {
+				t.Errorf("[error]: expected is %v, but actual is %v", tt.order, actual.Order)
+				return
 			}
 		})
 	}

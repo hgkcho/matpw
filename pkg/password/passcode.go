@@ -4,9 +4,11 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 )
 
 const (
@@ -25,17 +27,12 @@ var commonIV = []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09
 // Passcode represents passcode
 type Passcode struct {
 	Order     []int  `json:"-"`
-	OrderByte []byte `json:"-"`
+	orderByte []byte `json:"-"`
 	OrderCode []byte `json:"orderCode"`
 	Path      string `json:"-"`
 
-	cipher cipher.Block `json:"-"`
-}
-
-func NewPasscode() *Passcode {
-	return &Passcode{
-		Path: DefaultPasscodePath,
-	}
+	rw     io.ReadWriter `json:"-"`
+	cipher cipher.Block  `json:"-"`
 }
 
 // create 'aes' algorithm
@@ -49,62 +46,57 @@ func (p *Passcode) createCipher() error {
 }
 
 // Encript exec encript code
-func (p *Passcode) Encript() error {
-	// f, err := os.Create(p.Path)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer f.Close()
+func (p *Passcode) Encript(w io.Writer) error {
+	if p.Order == nil || reflect.DeepEqual(p.Order, []int{}) {
+		return errors.New("p.Order is empty")
+	}
 
 	if err := p.createCipher(); err != nil {
 		return err
 	}
 
-	p.convertOrderIntToByte()
+	orderByte := make([]byte, len(p.Order))
+	for i, v := range p.Order {
+		orderByte[i] = byte(v)
+	}
 
 	cfb := cipher.NewCFBEncrypter(p.cipher, commonIV)
-	p.OrderCode = make([]byte, len(p.OrderByte))
-	cfb.XORKeyStream(p.OrderCode, p.OrderByte)
-	// json.NewEncoder(f).Encode(&p)
+	p.OrderCode = make([]byte, len(orderByte))
+	cfb.XORKeyStream(p.OrderCode, orderByte)
 
-	// buf, err := json.MarshalIndent(p, "", "  ")
-	// if err != nil {
-	// 	return err
-	// }
-	// _, err = f.Write(buf)
-	// if err != nil {
-	// 	return err
-	// }
-
-	return nil
+	return json.NewEncoder(w).Encode(&p)
 }
 
-// Decript exec encript code
-func (p *Passcode) Decript() error {
-	f, err := os.Open(p.Path)
-	if err != nil {
+// Decript exec decript code
+func (p *Passcode) Decript(r io.Reader) error {
+	if err := json.NewDecoder(r).Decode(&p); err != nil {
 		return err
 	}
-	defer f.Close()
+	if p.OrderCode == nil {
+		return errors.New("p.OrderCode is not found")
+	}
 
-	json.NewDecoder(f).Decode(&p)
-
-	if err = p.createCipher(); err != nil {
+	if err := p.createCipher(); err != nil {
 		return err
 	}
 
 	// 復号文字列
 	cfbdec := cipher.NewCFBDecrypter(p.cipher, commonIV)
-	p.OrderByte = make([]byte, 4)
-	cfbdec.XORKeyStream(p.OrderByte, p.OrderCode)
-	fmt.Printf("%x=>%v\n", p.OrderCode, p.OrderByte)
+	orderByte := make([]byte, len(p.OrderCode))
+	cfbdec.XORKeyStream(orderByte, p.OrderCode)
+
+	order := make([]int, len(p.OrderCode))
+	for i, v := range orderByte {
+		order[i] = int(v)
+	}
+	p.Order = order
 	return nil
 }
 
-func (p *Passcode) convertOrderIntToByte() {
-	buf := make([]byte, len(p.Order))
-	for i := range p.Order {
-		buf[i] = byte(p.Order[i])
+func convertOrderIntToByte(order []int) []byte {
+	buf := make([]byte, len(order))
+	for i := range order {
+		buf[i] = byte(order[i])
 	}
-	p.OrderByte = buf
+	return buf
 }

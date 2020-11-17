@@ -37,6 +37,6 @@ var (
 )
 
 func main() {
-	fmt.Printf("Version: %v, Revision: %v", Version, Revision)
+	fmt.Printf("Version: %v, Revision: %v\n", Version, Revision)
 	cmd.Execute()
 }

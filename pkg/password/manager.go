@@ -1,9 +1,11 @@
 package password
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -11,19 +13,26 @@ import (
 var (
 	WorkDir             = filepath.Join(os.Getenv("HOME"), ".matpw")
 	DefaultPasswordPath = filepath.Join(WorkDir, "password.json")
+	DefaultSecretPath   = filepath.Join(WorkDir, "secret.json")
 )
 
 // Manager represents password manager
 type Manager struct {
-	Passwords        []Password
+	Passwords []Password
+	Passcode
 	PasswordDataPath string
 	CSVPath          string
-	Passcode
 	PasscodeDataPath string
+	passcodeBuf      io.ReadWriter
+	output           io.Writer
 }
 
 // Init decode json data and set them
 func (m *Manager) Init() error {
+	// TODO consider design
+	m.passcodeBuf = new(bytes.Buffer)
+	m.output = new(bytes.Buffer)
+
 	err := os.MkdirAll(WorkDir, 0755)
 	if err != nil {
 		return err
@@ -58,30 +67,36 @@ func (m *Manager) Init() error {
 }
 
 // ToCSV export password data
-func (m *Manager) ToCSV() error {
-	f, err := os.Create(m.CSVPath)
+// TODO  引数をio.Writerにする
+func (m *Manager) ToCSV(w io.Writer) error {
+	// TODO これはinitで共通処理にする?
+	f, err := os.Open(DefaultSecretPath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-
-	err = m.Passcode.Decript()
-
+	err = m.Passcode.Decript(f)
 	if err != nil {
 		return err
 	}
 
-	writer := csv.NewWriter(f)
+	writer := csv.NewWriter(w)
 	writer.Comma = ','
-	var buf = [][]string{
-		{"ID", "Service", "Acount", "Description", "PasswordSet", "CreatedAt", "UpdatedAt"},
-	}
+	writer.Write([]string{
+		"ID", "Service", "Acount", "Description", "Password", "CreatedAt", "UpdatedAt",
+	})
+	// var buf = [][]string{
+	// 	{"ID", "Service", "Acount", "Description", "PasswordSet", "CreatedAt", "UpdatedAt"},
+	// }
 	for _, v := range m.Passwords {
 		var pw string
-		pw += v.PasswordSet[m.Passcode.OrderByte[0]] + v.PasswordSet[m.Passcode.OrderByte[1]] + v.PasswordSet[m.Passcode.OrderByte[2]] + v.PasswordSet[m.Passcode.OrderByte[3]]
-		buf = append(buf, []string{v.ID.String(), v.Account, v.Descripiton, pw, v.CreatedAt.String(), v.UpdatedAt.String()})
+		pw += v.PasswordSet[m.Passcode.Order[0]] + v.PasswordSet[m.Passcode.Order[1]] + v.PasswordSet[m.Passcode.Order[2]] + v.PasswordSet[m.Passcode.Order[3]]
+		// buf = append(buf, []string{v.ID.String(), v.Account, v.Descripiton, pw, v.CreatedAt.String(), v.UpdatedAt.String()})
+		err = writer.Write([]string{v.ID.String(), v.Account, v.Descripiton, pw, v.CreatedAt.String(), v.UpdatedAt.String()})
+		if err != nil {
+			return err
+		}
 	}
-	err = writer.WriteAll(buf)
+	// err = writer.WriteAll(buf)
 	if err != nil {
 		return err
 	}
@@ -101,7 +116,7 @@ func (m *Manager) Delete(p Password) error {
 	return nil
 }
 
-func save(path string, v interface{}) error {
+func saveJSON(path string, v interface{}) error {
 	f, err := os.Create(path)
 	defer f.Close()
 	if err != nil {
@@ -116,7 +131,7 @@ func save(path string, v interface{}) error {
 	return nil
 }
 
-func load(path string, v interface{}) error {
+func loadJSON(path string, v interface{}) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -127,36 +142,20 @@ func load(path string, v interface{}) error {
 
 // Save save passwords to m.Path
 func (m *Manager) Save() error {
-	// f, err := os.Create(m.PasswordDataPath)
-	// defer f.Close()
-	// if err != nil {
-	// 	return err
-	// }
-	// // save as pretty json
-	// buf, err := json.MarshalIndent(m.Passwords, "", "  ")
-	// if err != nil {
-	// 	return err
-	// }
-	// f.Write(buf)
-	// return nil
-	return save(m.PasswordDataPath, m.Passwords)
+	return saveJSON(m.PasswordDataPath, m.Passwords)
 }
 
 // Load load password from m.Path
 func (m *Manager) Load() error {
-	// f, err := os.Open(m.PasswordDataPath)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer f.Close()
-	// return json.NewDecoder(f).Decode(&m.Passwords)
-	return load(m.PasswordDataPath, &m.Passwords)
+	return loadJSON(m.PasswordDataPath, &m.Passwords)
 }
 
+// SavePasscode save Passcode
 func (m *Manager) SavePasscode() error {
-	return save(m.PasscodeDataPath, m.Passcode)
+	return saveJSON(m.PasscodeDataPath, m.Passcode)
 }
 
+// LoadPasscode save Passcode
 func (m *Manager) LoadPasscode() error {
-	return load(m.PasscodeDataPath, &m.Passcode)
+	return loadJSON(m.PasscodeDataPath, &m.Passcode)
 }

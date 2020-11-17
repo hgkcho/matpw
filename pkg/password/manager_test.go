@@ -1,10 +1,15 @@
 package password
 
 import (
+	"bufio"
 	"bytes"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,10 +17,12 @@ import (
 
 func TestManager_ToCSV(t *testing.T) {
 	type fields struct {
-		Passwords []Password
-		Path      string
-		CSVPath   string
-		Passcode  Passcode
+		Passwords        []Password
+		Path             string
+		CSVPath          string
+		PasswordDataPath string
+		PasscodeDataPath string
+		Passcode         Passcode
 	}
 	tests := []struct {
 		name    string
@@ -25,10 +32,13 @@ func TestManager_ToCSV(t *testing.T) {
 		{
 			name: "[OK]: export successfully",
 			fields: fields{
-				CSVPath: "output.csv",
-				Path:    filepath.Join(os.Getenv("HOME"), ".matpw", "password.json"),
+				CSVPath:          filepath.Join(os.Getenv("TMPDIR"), "output.csv"),
+				Path:             filepath.Join(os.Getenv("HOME"), ".matpw", "password.json"),
+				PasswordDataPath: filepath.Join(os.Getenv("TMPDIR"), "matpassword.json"),
+				PasscodeDataPath: filepath.Join(os.Getenv("TMPDIR"), "passsecret.json"),
 				Passcode: Passcode{
-					Path: filepath.Join(os.Getenv("HOME"), ".matpw", "secret.json"),
+					Path: filepath.Join(os.Getenv("TMPDIR"), "secret.json"),
+					rw:   &bytes.Buffer{},
 				},
 			},
 			wantErr: false,
@@ -42,12 +52,34 @@ func TestManager_ToCSV(t *testing.T) {
 				CSVPath:          tt.fields.CSVPath,
 				Passcode:         tt.fields.Passcode,
 			}
+			// setupTestData(t, *m)
+			var p = Passcode{orderByte: []byte{0, 4, 6, 19}, rw: &bytes.Buffer{}}
+			var w io.Writer
+			if err := p.Encript(w); err != nil {
+				log.Fatal(err)
+			}
+			m.Passcode.rw = p.rw
 			if err := m.Load(); err != nil {
 				t.Fatalf("[error]: %v", err)
 			}
-			if err := m.ToCSV(); (err != nil) != tt.wantErr {
+			var buf = new(bytes.Buffer)
+			if err := m.ToCSV(buf); (err != nil) != tt.wantErr {
 				t.Errorf("Manager.ToCSV() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			s := bufio.NewReader(buf)
+			l, isP, err := s.ReadLine()
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("isPrefix: %v, line: %v", isP, l)
+			tests := []string{
+				"ID", "Service", "Acount", "Description", "PasswordSet", "CreatedAt", "UpdatedAt",
+			}
+			actual := strings.Split(string(l), ",")
+			if !reflect.DeepEqual(actual, tests) {
+				t.Errorf("get unexpected header: get %v", tests)
+			}
+
 		})
 	}
 }
@@ -93,6 +125,7 @@ func TestManager_Init(t *testing.T) {
 				Passcode:         tt.fields.Passcode,
 				PasscodeDataPath: tt.fields.PasscodeDataPath,
 			}
+			// m.Passcode.Encript()
 			setupTestData(t, *m)
 			if err := m.Init(); (err != nil) != tt.wantErr {
 				t.Errorf("Manager.Init() error = %v, wantErr %v", err, tt.wantErr)
@@ -119,8 +152,12 @@ func setupTestData(t *testing.T, m Manager) {
 	pw.Create()
 	m.Passwords = []Password{pw}
 	pc.Order = []int{1, 4, 18, 23}
-	pc.Encript()
-	m.Passcode = pc
+	// pc.Encript()
+	// m.Passcode = pc
 	m.Save()
 	m.SavePasscode()
+}
+
+func cleanUpTestData(t *testing.T, m Manager) {
+
 }
